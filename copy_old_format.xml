@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<order>
+    <toBeIgnored>ignored</toBeIgnored>
+    <tooIgnored>ignored</tooIgnored>
+    <ignored bikId="1111">ignored attribute</ignored>
+    <time bikId="1234">124112007</time>
+    <id>123</id>
+    <customer>
+        <name>Jan Kowalski</name>
+        <email>jan.kowalski@example.com</email>
+    </customer>
+    <items>
+        <item>
+            <product>Telefon</product>
+            <price>2500</price>
+            <quantity>1</quantity>
+        </item>
+    </items>
+    <timestamp>2024-03-14T12:00:00</timestamp>
+</order>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<order>
+    <time bikId="1234">124112827</time>
+    <id>456</id>
+    <customer>
+        <email>jan.kowalski@example.com</email>
+        <name>Jan Kowalski</name>
+    </customer>
+    <items>
+        <item>
+            <product>Telefon</product>
+            <quantity>1</quantity>
+            <price>2500</price>
+        </item>
+    </items>
+    <timestamp>2024-03-14T12:05:00</timestamp>
+</order>
