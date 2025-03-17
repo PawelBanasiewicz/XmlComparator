@@ -12,6 +12,7 @@ import javax.xml.parsers.ParserConfigurationException;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,9 +25,9 @@ public class XmlComparator {
     private static final String NO_VALUE = "N/A";
     private static final Set<String> IGNORE_NODES = Set.of("toBeIgnored", "tooIgnored");
     private static final Set<String> IGNORE_ATTRIBUTES = Set.of("bikId=\"1111\"");
+    private static final Set<String> IGNORE_ATTRIBUTE_COUNT_NODES = Set.of("newItem");
 
     private static final Set<String> TIME_WITH_DIFFERENT_ENDING = Set.of("bikId=\"1234\"");
-
 
     public static void main(String[] args) throws IOException, ParserConfigurationException, SAXException {
         File oldXmlFile = new File("old_format.xml");
@@ -35,6 +36,12 @@ public class XmlComparator {
         String oldXml = new String(Files.readAllBytes(oldXmlFile.toPath()));
         String newXml = new String(Files.readAllBytes(newXmlFile.toPath()));
 
+        try (PrintWriter writer = new PrintWriter("output.txt")) {
+            compareXml(oldXml, newXml, writer);
+        }
+    }
+
+    private static void compareXml(String oldXml, String newXml, PrintWriter writer) throws ParserConfigurationException, IOException, SAXException {
         int totalNodes = countNodes(oldXml) + countNodes(newXml);
 
         Diff diff = DiffBuilder.compare(oldXml)
@@ -42,9 +49,16 @@ public class XmlComparator {
                 .ignoreWhitespace()
                 .ignoreComments()
                 .checkForSimilar()
-                .withNodeMatcher(new DefaultNodeMatcher(ElementSelectors.byNameAndAllAttributes))
+                .withNodeMatcher(new DefaultNodeMatcher(ElementSelectors.byName))
                 .withNodeFilter(XmlComparator::filterNode)
                 .withDifferenceEvaluator((comparison, comparisonResult) -> {
+                    if (comparison.getType() == ComparisonType.ATTR_NAME_LOOKUP) {
+                        Node controlNode = comparison.getControlDetails().getTarget();
+                        if (controlNode != null && IGNORE_ATTRIBUTE_COUNT_NODES.contains(controlNode.getNodeName())) {
+                            return ComparisonResult.SIMILAR;
+                        }
+                    }
+
                     if (isTimeDifferenceCase(comparison)) {
                         String oldValue = comparison.getControlDetails().getValue().toString();
                         String newValue = comparison.getTestDetails().getValue().toString();
@@ -54,11 +68,7 @@ public class XmlComparator {
                             newValue = newValue.substring(0, 6);
                         }
 
-                        if (oldValue.equals(newValue)) {
-                            return ComparisonResult.SIMILAR;
-                        } else {
-                            return comparisonResult;
-                        }
+                        return oldValue.equals(newValue) ? ComparisonResult.SIMILAR : comparisonResult;
                     }
 
                     return comparisonResult;
@@ -70,8 +80,10 @@ public class XmlComparator {
 
         List<String> missingNodes = new ArrayList<>();
         List<String> additionalNodes = new ArrayList<>();
+        List<String> missingAttributes = new ArrayList<>();
+        List<String> additionalAttributes = new ArrayList<>();
 
-        System.out.println("\n==== 🧐 PORÓWNANIE XML ====");
+        writer.println("\n==== PORÓWNANIE XML ====");
 
         int actualDifferencesCount = 0;
 
@@ -82,7 +94,6 @@ public class XmlComparator {
             Object oldValueObj = comparison.getControlDetails().getValue();
             Object newValueObj = comparison.getTestDetails().getValue();
 
-
             if (comparison.getControlDetails().getXPath() != null) {
                 xpath = comparison.getControlDetails().getXPath();
             } else if (comparison.getTestDetails().getXPath() != null) {
@@ -92,11 +103,11 @@ public class XmlComparator {
             String oldValue = (oldValueObj != null) ? oldValueObj.toString() : NO_VALUE;
             String newValue = (newValueObj != null) ? newValueObj.toString() : NO_VALUE;
 
-            if (type == TEXT_VALUE) {
-                System.out.println("🔸 Różnica w wartości tekstowej:");
-                System.out.println("  - XPath: " + xpath);
-                System.out.println("  - Oczekiwane: " + oldValue);
-                System.out.println("  - Aktualne: " + newValue);
+            if (type == ComparisonType.TEXT_VALUE) {
+                writer.println("Różnica w wartości tekstowej:");
+                writer.println("  - XPath: " + xpath);
+                writer.println("  - Oczekiwane: " + oldValue);
+                writer.println("  - Aktualne: " + newValue);
                 actualDifferencesCount++;
             } else if (type == ComparisonType.CHILD_LOOKUP) {
                 if (NO_VALUE.equals(oldValue) && !NO_VALUE.equals(newValue)) {
@@ -105,21 +116,37 @@ public class XmlComparator {
                     missingNodes.add(xpath + " -> " + oldValue);
                 }
                 actualDifferencesCount++;
+            } else if (type == ComparisonType.ATTR_NAME_LOOKUP) {
+                if (NO_VALUE.equals(oldValue) && !NO_VALUE.equals(newValue)) {
+                    additionalAttributes.add(xpath + " -> " + newValue);
+                } else if (NO_VALUE.equals(newValue) && !NO_VALUE.equals(oldValue)) {
+                    missingAttributes.add(xpath + " -> " + oldValue);
+                }
+                actualDifferencesCount++;
             }
         }
 
         // Obliczanie % zgodności
         double similarityPercentage = 100.0 * (1 - ((double) actualDifferencesCount / totalNodes));
-        System.out.printf("\n✅ Procent zgodności: %.2f%%\n", similarityPercentage);
+        writer.printf("\nProcent zgodności: %.2f%%\n", similarityPercentage);
 
-        System.out.println("#######################################################");
-        System.out.println("Brakujące węzły (są w starej wersji, brak w nowej)");
-        missingNodes.forEach(System.out::println);
+        writer.println("#######################################################");
+        writer.println("Brakujące węzły (są w starej wersji, brak w nowej)");
+        missingNodes.forEach(writer::println);
 
-        System.out.println("#######################################################");
-        System.out.println("Nowe węzły (są w nowej wersji, brak w starej)");
-        additionalNodes.forEach(System.out::println);
+        writer.println("#######################################################");
+        writer.println("Nowe węzły (są w nowej wersji, brak w starej)");
+        additionalNodes.forEach(writer::println);
+
+        writer.println("#######################################################");
+        writer.println("Brakujące atrybuty (są w starej wersji, brak w nowej)");
+        missingAttributes.forEach(writer::println);
+
+        writer.println("#######################################################");
+        writer.println("Nowe atrybuty (są w nowej wersji, brak w starej)");
+        additionalAttributes.forEach(writer::println);
     }
+
 
     private static boolean filterNode(final Node node) {
         if (IGNORE_NODES.contains(node.getNodeName())) {

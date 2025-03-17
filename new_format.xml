@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <order>
+    <newItem bikId="2222" description="test description">new item value</newItem>
     <time bikId="1234">124112827</time>
     <id>456</id>
     <customer>
