@@ -16,18 +16,31 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
+import static org.xmlunit.diff.ComparisonType.ATTR_NAME_LOOKUP;
 import static org.xmlunit.diff.ComparisonType.TEXT_VALUE;
 
 public class XmlComparator {
 
     private static final String NO_VALUE = "N/A";
     private static final Set<String> IGNORE_NODES = Set.of("toBeIgnored", "tooIgnored");
-    private static final Set<String> IGNORE_ATTRIBUTES = Set.of("bikId=\"1111\"");
     private static final Set<String> IGNORE_ATTRIBUTE_COUNT_NODES = Set.of("newItem");
 
     private static final Set<String> TIME_WITH_DIFFERENT_ENDING = Set.of("bikId=\"1234\"");
+
+    private static final Map<String, String> SKIP_FOR_ATTRIBUTE_MAP = Map.of(
+            "mapping", "not used",
+            "mapping1", "skipped"
+    );
+
+    private static final Map<String, Set<String>> IGNORE_ATTRIBUTES_PER_NODE = Map.of(
+            "time", Set.of("description"),
+            "time2", Set.of("description")
+    );
+
+    private static String pathToSkip = null;
 
     public static void main(String[] args) throws IOException, ParserConfigurationException, SAXException {
         File oldXmlFile = new File("old_format.xml");
@@ -42,8 +55,6 @@ public class XmlComparator {
     }
 
     private static void compareXml(String oldXml, String newXml, PrintWriter writer) throws ParserConfigurationException, IOException, SAXException {
-        int totalNodes = countNodes(oldXml) + countNodes(newXml);
-
         Diff diff = DiffBuilder.compare(oldXml)
                 .withTest(newXml)
                 .ignoreWhitespace()
@@ -52,9 +63,48 @@ public class XmlComparator {
                 .withNodeMatcher(new DefaultNodeMatcher(ElementSelectors.byName))
                 .withNodeFilter(XmlComparator::filterNode)
                 .withDifferenceEvaluator((comparison, comparisonResult) -> {
-                    if (comparison.getType() == ComparisonType.ATTR_NAME_LOOKUP) {
-                        Node controlNode = comparison.getControlDetails().getTarget();
-                        if (controlNode != null && IGNORE_ATTRIBUTE_COUNT_NODES.contains(controlNode.getNodeName())) {
+
+                    Node testNode = comparison.getTestDetails().getTarget();
+
+                    if (pathToSkip == null && hasSkippingAttribute(testNode)) {
+                        pathToSkip = comparison.getControlDetails().getXPath();
+                    }
+
+                    if (pathToSkip != null) {
+                        if (comparison.getTestDetails().getXPath() != null && comparison.getTestDetails().getXPath().contains(pathToSkip) ||
+                        comparison.getControlDetails().getXPath() != null && comparison.getControlDetails().getXPath().contains(pathToSkip)) {
+                            return ComparisonResult.SIMILAR;
+                        } else {
+                            pathToSkip = null;
+                        }
+                    }
+
+
+                    if ((comparison.getType() == ComparisonType.ATTR_VALUE || comparison.getType() == ATTR_NAME_LOOKUP)) {
+                        final Comparison.Detail controlDetails = comparison.getControlDetails();
+
+                        final String controlParentNodeXPath = controlDetails.getParentXPath();
+                        final String controlParentLastNode = getLastNodeFromParentXPath(controlParentNodeXPath);
+
+                        final String controlNodeXPath = controlDetails.getXPath();
+                        String controlNodeAttributeName = getAttributeName(controlNodeXPath);
+
+
+                        final Comparison.Detail testDetails = comparison.getTestDetails();
+
+                        final String testParentNodeXPath = testDetails.getParentXPath();
+                        final String testParentLastNode = getLastNodeFromParentXPath(testParentNodeXPath);
+
+                        final String testNodeXPath = testDetails.getXPath();
+                        String testNodeAttributeName = getAttributeName(testNodeXPath);
+
+                        if (IGNORE_ATTRIBUTES_PER_NODE.containsKey(controlParentLastNode) &&
+                                IGNORE_ATTRIBUTES_PER_NODE.get(controlParentLastNode).contains(controlNodeAttributeName)) {
+                            return ComparisonResult.SIMILAR;
+                        }
+
+                        if (IGNORE_ATTRIBUTES_PER_NODE.containsKey(testParentLastNode) &&
+                                IGNORE_ATTRIBUTES_PER_NODE.get(testParentLastNode).contains(testNodeAttributeName)) {
                             return ComparisonResult.SIMILAR;
                         }
                     }
@@ -115,19 +165,21 @@ public class XmlComparator {
                 } else if (NO_VALUE.equals(newValue) && !NO_VALUE.equals(oldValue)) {
                     missingNodes.add(xpath + " -> " + oldValue);
                 }
-                actualDifferencesCount++;
+//                actualDifferencesCount++;
             } else if (type == ComparisonType.ATTR_NAME_LOOKUP) {
                 if (NO_VALUE.equals(oldValue) && !NO_VALUE.equals(newValue)) {
                     additionalAttributes.add(xpath + " -> " + newValue);
                 } else if (NO_VALUE.equals(newValue) && !NO_VALUE.equals(oldValue)) {
                     missingAttributes.add(xpath + " -> " + oldValue);
                 }
-                actualDifferencesCount++;
+//                actualDifferencesCount++;
             }
         }
 
         // Obliczanie % zgodności
-        double similarityPercentage = 100.0 * (1 - ((double) actualDifferencesCount / totalNodes));
+        int oldXmlNodeCount = countNodes(oldXml);
+        int correctNodeCount = oldXmlNodeCount - actualDifferencesCount;
+        double similarityPercentage = ((double) (correctNodeCount) / oldXmlNodeCount) * 100;
         writer.printf("\nProcent zgodności: %.2f%%\n", similarityPercentage);
 
         writer.println("#######################################################");
@@ -147,24 +199,41 @@ public class XmlComparator {
         additionalAttributes.forEach(writer::println);
     }
 
+    private static String getAttributeName(String controlNodeXPath) {
+        return controlNodeXPath.contains("@") ? controlNodeXPath.substring(controlNodeXPath.indexOf('@') + 1) : "";
+    }
 
-    private static boolean filterNode(final Node node) {
-        if (IGNORE_NODES.contains(node.getNodeName())) {
+    private static String getLastNodeFromParentXPath(String controlNodeParentXPath) {
+        final int lastSlashIndex = controlNodeParentXPath.lastIndexOf('/');
+        int firstBracketIndex = controlNodeParentXPath.indexOf('[', lastSlashIndex);
+
+        return (firstBracketIndex != -1)
+                ? controlNodeParentXPath.substring(lastSlashIndex + 1, firstBracketIndex)
+                : controlNodeParentXPath.substring(lastSlashIndex + 1);
+    }
+
+    private static boolean hasSkippingAttribute(Node node) {
+        if (node == null || !node.hasAttributes()) {
             return false;
         }
 
-        final NamedNodeMap attributes = node.getAttributes();
+        NamedNodeMap attributes = node.getAttributes();
+        for (int i = 0; i < attributes.getLength(); i++) {
+            Node attribute = attributes.item(i);
+            String attributeName = attribute.getNodeName();
+            String attributeValue = attribute.getNodeValue();
 
-        if (attributes != null) {
-            for (int i = 0; i < attributes.getLength(); i++) {
-                Node attribute = attributes.item(i);
-                final String attributeString = attribute.toString();
-                if (IGNORE_ATTRIBUTES.contains(attributeString)) {
-                    return false;
-                }
+            if (SKIP_FOR_ATTRIBUTE_MAP.containsKey(attributeName) &&
+                    SKIP_FOR_ATTRIBUTE_MAP.get(attributeName).equals(attributeValue)) {
+                return true;
             }
         }
-        return true;
+        return false;
+    }
+
+
+    private static boolean filterNode(final Node node) {
+        return !IGNORE_NODES.contains(node.getNodeName());
     }
 
     private static boolean isTimeDifferenceCase(final Comparison comparison) {

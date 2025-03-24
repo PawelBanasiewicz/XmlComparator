@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <order>
-    <newItem bikId="2222" description="test description">new item value</newItem>
-    <time bikId="1234">124112827</time>
+    <time bikId="1234" description="test">1212</time>
+    <time2 description="test">1212</time2>
     <id>456</id>
     <customer>
         <email>jan.kowalski@example.com</email>
