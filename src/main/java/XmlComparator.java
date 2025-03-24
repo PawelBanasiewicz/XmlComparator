@@ -133,6 +133,10 @@ public class XmlComparator {
 //        List<String> missingAttributes = new ArrayList<>();
 //        List<String> additionalAttributes = new ArrayList<>();
 
+        List<String> attributeDifferences = new ArrayList<>();
+        List<String> orderDifferences = new ArrayList<>();
+        List<String> otherDifferences = new ArrayList<>();
+
         writer.println("\n==== PORÓWNANIE XML ====");
 
         int actualDifferencesCount = 0;
@@ -173,7 +177,35 @@ public class XmlComparator {
                 writer.println("  - Oczekiwane: " + oldValue);
                 writer.println("  - Aktualne: " + newValue);
                 actualDifferencesCount++;
+            } else if (type == ComparisonType.ATTR_NAME_LOOKUP || type == ComparisonType.ATTR_VALUE) {
+                Object oldValueObj = comparison.getControlDetails().getValue();
+                Object newValueObj = comparison.getTestDetails().getValue();
+
+                String oldValue = (oldValueObj != null) ? oldValueObj.toString() : NO_VALUE;
+                String newValue = (newValueObj != null) ? newValueObj.toString() : NO_VALUE;
+                attributeDifferences.add("XPath: " + xpath + "\n  - Atrybut zmieniony: " + oldValue + " → " + newValue);
+
+            } else if (type == ComparisonType.CHILD_NODELIST_SEQUENCE) {
+                orderDifferences.add("XPath: " + xpath + "\n  - Kolejność węzłów różna");
+
+            } else {
+                otherDifferences.add("XPath: " + xpath + "\n  - Rodzaj różnicy: " + type);
             }
+        }
+
+        if (!attributeDifferences.isEmpty()) {
+            writer.println("\n=== 🏷️ Zmiany w atrybutach ===");
+            attributeDifferences.forEach(writer::println);
+        }
+
+        if (!orderDifferences.isEmpty()) {
+            writer.println("\n=== 🔄 Zmiany w kolejności węzłów ===");
+            orderDifferences.forEach(writer::println);
+        }
+
+        if (!otherDifferences.isEmpty()) {
+            writer.println("\n=== ❔ Inne zmiany ===");
+            otherDifferences.forEach(writer::println);
         }
 
         // Obliczanie % zgodności
