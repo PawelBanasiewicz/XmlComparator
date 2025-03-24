@@ -128,10 +128,10 @@ public class XmlComparator {
         List<Difference> differences = new ArrayList<>();
         diff.getDifferences().forEach(differences::add);
 
-        List<String> missingNodes = new ArrayList<>();
-        List<String> additionalNodes = new ArrayList<>();
-        List<String> missingAttributes = new ArrayList<>();
-        List<String> additionalAttributes = new ArrayList<>();
+//        List<String> missingNodes = new ArrayList<>();
+//        List<String> additionalNodes = new ArrayList<>();
+//        List<String> missingAttributes = new ArrayList<>();
+//        List<String> additionalAttributes = new ArrayList<>();
 
         writer.println("\n==== PORÓWNANIE XML ====");
 
@@ -141,8 +141,7 @@ public class XmlComparator {
             Comparison comparison = d.getComparison();
             ComparisonType type = comparison.getType();
             String xpath = null;
-            Object oldValueObj = comparison.getControlDetails().getValue();
-            Object newValueObj = comparison.getTestDetails().getValue();
+
 
             if (comparison.getControlDetails().getXPath() != null) {
                 xpath = comparison.getControlDetails().getXPath();
@@ -150,29 +149,30 @@ public class XmlComparator {
                 xpath = comparison.getTestDetails().getXPath();
             }
 
-            String oldValue = (oldValueObj != null) ? oldValueObj.toString() : NO_VALUE;
-            String newValue = (newValueObj != null) ? newValueObj.toString() : NO_VALUE;
-
             if (type == ComparisonType.TEXT_VALUE) {
-                writer.println("Różnica w wartości tekstowej:");
+                Object oldValueObj = comparison.getControlDetails().getValue();
+                Object newValueObj = comparison.getTestDetails().getValue();
+
+                String oldValue = (oldValueObj != null) ? oldValueObj.toString() : NO_VALUE;
+                String newValue = (newValueObj != null) ? newValueObj.toString() : NO_VALUE;
+
+                writer.println("Różnica w wartości tekstowej (w wezle rodzic):");
                 writer.println("  - XPath: " + xpath);
                 writer.println("  - Oczekiwane: " + oldValue);
                 writer.println("  - Aktualne: " + newValue);
                 actualDifferencesCount++;
             } else if (type == ComparisonType.CHILD_LOOKUP) {
-                if (NO_VALUE.equals(oldValue) && !NO_VALUE.equals(newValue)) {
-                    additionalNodes.add(xpath + " -> " + newValue);
-                } else if (NO_VALUE.equals(newValue) && !NO_VALUE.equals(oldValue)) {
-                    missingNodes.add(xpath + " -> " + oldValue);
-                }
-//                actualDifferencesCount++;
-            } else if (type == ComparisonType.ATTR_NAME_LOOKUP) {
-                if (NO_VALUE.equals(oldValue) && !NO_VALUE.equals(newValue)) {
-                    additionalAttributes.add(xpath + " -> " + newValue);
-                } else if (NO_VALUE.equals(newValue) && !NO_VALUE.equals(oldValue)) {
-                    missingAttributes.add(xpath + " -> " + oldValue);
-                }
-//                actualDifferencesCount++;
+                final Node oldNode = comparison.getControlDetails().getTarget();
+                final String oldValue = oldNode != null ? oldNode.getTextContent() : NO_VALUE;
+
+                final Node newNode = comparison.getTestDetails().getTarget();
+                final String newValue = newNode != null ? newNode.getTextContent() : NO_VALUE;
+
+                writer.println("Różnica w wartości tekstowej (w wezle dziecko):");
+                writer.println("  - XPath: " + xpath);
+                writer.println("  - Oczekiwane: " + oldValue);
+                writer.println("  - Aktualne: " + newValue);
+                actualDifferencesCount++;
             }
         }
 
@@ -181,22 +181,22 @@ public class XmlComparator {
         int correctNodeCount = oldXmlNodeCount - actualDifferencesCount;
         double similarityPercentage = ((double) (correctNodeCount) / oldXmlNodeCount) * 100;
         writer.printf("\nProcent zgodności: %.2f%%\n", similarityPercentage);
-
-        writer.println("#######################################################");
-        writer.println("Brakujące węzły (są w starej wersji, brak w nowej)");
-        missingNodes.forEach(writer::println);
-
-        writer.println("#######################################################");
-        writer.println("Nowe węzły (są w nowej wersji, brak w starej)");
-        additionalNodes.forEach(writer::println);
-
-        writer.println("#######################################################");
-        writer.println("Brakujące atrybuty (są w starej wersji, brak w nowej)");
-        missingAttributes.forEach(writer::println);
-
-        writer.println("#######################################################");
-        writer.println("Nowe atrybuty (są w nowej wersji, brak w starej)");
-        additionalAttributes.forEach(writer::println);
+//
+//        writer.println("#######################################################");
+//        writer.println("Brakujące węzły (są w starej wersji, brak w nowej)");
+//        missingNodes.forEach(writer::println);
+//
+//        writer.println("#######################################################");
+//        writer.println("Nowe węzły (są w nowej wersji, brak w starej)");
+//        additionalNodes.forEach(writer::println);
+//
+//        writer.println("#######################################################");
+//        writer.println("Brakujące atrybuty (są w starej wersji, brak w nowej)");
+//        missingAttributes.forEach(writer::println);
+//
+//        writer.println("#######################################################");
+//        writer.println("Nowe atrybuty (są w nowej wersji, brak w starej)");
+//        additionalAttributes.forEach(writer::println);
     }
 
     private static String getAttributeName(String controlNodeXPath) {
