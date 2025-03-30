@@ -14,10 +14,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static org.xmlunit.diff.ComparisonType.ATTR_NAME_LOOKUP;
 import static org.xmlunit.diff.ComparisonType.TEXT_VALUE;
@@ -35,7 +32,7 @@ public class XmlComparator {
             "mapping1", "skipped"
     );
 
-    private static final Map<String, Set<String>> IGNORE_ATTRIBUTES_PER_NODE = Map.of(
+    private static final Map<String, Set<String>> IGNORE_ATTRIBUTES_PER_NODE_MAP = Map.of(
             "time", Set.of("description"),
             "time2", Set.of("description")
     );
@@ -49,13 +46,13 @@ public class XmlComparator {
         String oldXml = new String(Files.readAllBytes(oldXmlFile.toPath()));
         String newXml = new String(Files.readAllBytes(newXmlFile.toPath()));
 
-        try (PrintWriter writer = new PrintWriter("output.txt")) {
+        try (final PrintWriter writer = new PrintWriter("output.txt")) {
             compareXml(oldXml, newXml, writer);
         }
     }
 
-    private static void compareXml(String oldXml, String newXml, PrintWriter writer) throws ParserConfigurationException, IOException, SAXException {
-        Diff diff = DiffBuilder.compare(oldXml)
+    private static void compareXml(final String oldXml, final String newXml, final PrintWriter writer) throws ParserConfigurationException, IOException, SAXException {
+        final Diff diff = DiffBuilder.compare(oldXml)
                 .withTest(newXml)
                 .ignoreWhitespace()
                 .ignoreComments()
@@ -83,153 +80,199 @@ public class XmlComparator {
                         final Comparison.Detail controlDetails = comparison.getControlDetails();
 
                         final String controlParentNodeXPath = controlDetails.getParentXPath();
-                        final String controlParentLastNode = getLastNodeFromParentXPath(controlParentNodeXPath);
+                        final String controlParentLastNode = getLastNodeFromXPath(controlParentNodeXPath);
 
                         final String controlNodeXPath = controlDetails.getXPath();
-                        String controlNodeAttributeName = getAttributeName(controlNodeXPath);
-
+                        final String controlNodeAttributeName = getAttributeNameFromXPath(controlNodeXPath);
 
                         final Comparison.Detail testDetails = comparison.getTestDetails();
 
                         final String testParentNodeXPath = testDetails.getParentXPath();
-                        final String testParentLastNode = getLastNodeFromParentXPath(testParentNodeXPath);
+                        final String testParentLastNode = getLastNodeFromXPath(testParentNodeXPath);
 
                         final String testNodeXPath = testDetails.getXPath();
-                        String testNodeAttributeName = getAttributeName(testNodeXPath);
+                        final String testNodeAttributeName = getAttributeNameFromXPath(testNodeXPath);
 
-                        if (IGNORE_ATTRIBUTES_PER_NODE.containsKey(controlParentLastNode) &&
-                                IGNORE_ATTRIBUTES_PER_NODE.get(controlParentLastNode).contains(controlNodeAttributeName)) {
+                        if (IGNORE_ATTRIBUTES_PER_NODE_MAP.containsKey(controlParentLastNode) &&
+                                IGNORE_ATTRIBUTES_PER_NODE_MAP.get(controlParentLastNode).contains(controlNodeAttributeName)) {
                             return ComparisonResult.SIMILAR;
                         }
 
-                        if (IGNORE_ATTRIBUTES_PER_NODE.containsKey(testParentLastNode) &&
-                                IGNORE_ATTRIBUTES_PER_NODE.get(testParentLastNode).contains(testNodeAttributeName)) {
+                        if (IGNORE_ATTRIBUTES_PER_NODE_MAP.containsKey(testParentLastNode) &&
+                                IGNORE_ATTRIBUTES_PER_NODE_MAP.get(testParentLastNode).contains(testNodeAttributeName)) {
                             return ComparisonResult.SIMILAR;
                         }
                     }
 
                     if (isTimeDifferenceCase(comparison)) {
-                        String oldValue = comparison.getControlDetails().getValue().toString();
-                        String newValue = comparison.getTestDetails().getValue().toString();
+                        String controlValue = comparison.getControlDetails().getValue().toString();
+                        String testValue = comparison.getTestDetails().getValue().toString();
 
-                        if (oldValue.length() > 6 && newValue.length() > 6) {
-                            oldValue = oldValue.substring(0, 6);
-                            newValue = newValue.substring(0, 6);
+                        if (controlValue.length() > 6 && testValue.length() > 6) {
+                            controlValue = controlValue.substring(0, 6);
+                            testValue = testValue.substring(0, 6);
                         }
 
-                        return oldValue.equals(newValue) ? ComparisonResult.SIMILAR : comparisonResult;
+                        return controlValue.equals(testValue) ? ComparisonResult.SIMILAR : comparisonResult;
                     }
 
                     return comparisonResult;
                 })
                 .build();
 
-        List<Difference> differences = new ArrayList<>();
+        final List<Difference> differences = new ArrayList<>();
         diff.getDifferences().forEach(differences::add);
 
-        List<String> textDifferences = new ArrayList<>();
-        List<String> attributeDifferences = new ArrayList<>();
-        List<String> orderDifferences = new ArrayList<>();
-        List<String> otherDifferences = new ArrayList<>();
+        final List<ReportDifference> textDifferences = new ArrayList<>();
+        final List<ReportDifference> attributeDifferences = new ArrayList<>();
+        final List<ReportDifference> orderDifferences = new ArrayList<>();
+        final List<ReportDifference> otherDifferences = new ArrayList<>();
 
+        for (final Difference difference : differences) {
+            final Comparison comparison = difference.getComparison();
+            final Comparison.Detail controlDetails = comparison.getControlDetails();
+            final Comparison.Detail testDetails = comparison.getTestDetails();
+            final ComparisonType type = comparison.getType();
 
-        for (Difference d : differences) {
-            Comparison comparison = d.getComparison();
-            ComparisonType type = comparison.getType();
-            String xpath = null;
-
-
-            if (comparison.getControlDetails().getXPath() != null) {
-                xpath = comparison.getControlDetails().getXPath();
-            } else if (comparison.getTestDetails().getXPath() != null) {
-                xpath = comparison.getTestDetails().getXPath();
-            }
+            String xpath = chooseXPath(comparison);
 
             if (type == ComparisonType.TEXT_VALUE) {
-                Object oldValueObj = comparison.getControlDetails().getValue();
-                Object newValueObj = comparison.getTestDetails().getValue();
+                final Object controlValueObject = controlDetails.getValue();
+                final Object testValueObject = testDetails.getValue();
+                final String controlValue = (controlValueObject != null) ? controlValueObject.toString() : NO_VALUE;
+                final String testValue = (testValueObject != null) ? testValueObject.toString() : NO_VALUE;
 
-                String oldValue = (oldValueObj != null) ? oldValueObj.toString() : NO_VALUE;
-                String newValue = (newValueObj != null) ? newValueObj.toString() : NO_VALUE;
+                final Node controlNode = controlDetails.getTarget();
+                final Node testNode = testDetails.getTarget();
+                final Map<String, String> oldNodeAttributes = getNodeAttributesFromNode(controlNode != null ? controlNode.getParentNode() : null);
+                final Map<String, String> newNodeAttributes = getNodeAttributesFromNode(testNode != null ? testNode.getParentNode() : null);
 
-                textDifferences.add("XPath: " + xpath + "\n  - Oczekiwane: " + oldValue + "\n  - Aktualne: " + newValue);
+                textDifferences.add(new TextDifference(xpath, oldNodeAttributes, newNodeAttributes, controlValue, testValue));
             } else if (type == ComparisonType.CHILD_LOOKUP) {
-                final Node oldNode = comparison.getControlDetails().getTarget();
-                final String oldValue = oldNode != null ? oldNode.getTextContent() : NO_VALUE;
+                final Node controlNode = controlDetails.getTarget();
+                final String controlValue = controlNode != null ? controlNode.getTextContent() : NO_VALUE;
 
-                final Node newNode = comparison.getTestDetails().getTarget();
-                final String newValue = newNode != null ? newNode.getTextContent() : NO_VALUE;
+                final Node testNode = testDetails.getTarget();
+                final String testValue = testNode != null ? testNode.getTextContent() : NO_VALUE;
 
-                textDifferences.add("XPath: " + xpath + "\n  - Oczekiwane: " + oldValue + "\n  - Aktualne: " + newValue);
+                final Map<String, String> controlNodeAttributes = getNodeAttributesFromNode(controlNode);
+                final Map<String, String> testNodeAttributes = getNodeAttributesFromNode(testNode);
+
+                textDifferences.add(new TextDifference(xpath, controlNodeAttributes, testNodeAttributes, controlValue, testValue));
             } else if (type == ComparisonType.ATTR_NAME_LOOKUP || type == ComparisonType.ATTR_VALUE) {
-                Object oldValueObj = comparison.getControlDetails().getValue();
-                Object newValueObj = comparison.getTestDetails().getValue();
+                final Object controlValueObject = controlDetails.getValue();
+                final Object testValueObject = testDetails.getValue();
 
-                String oldValue = (oldValueObj != null) ? oldValueObj.toString() : NO_VALUE;
-                String newValue = (newValueObj != null) ? newValueObj.toString() : NO_VALUE;
-                attributeDifferences.add("XPath: " + xpath + "\n  - Atrybut zmieniony: " + oldValue + " → " + newValue);
+                final String controlValue = (controlValueObject != null) ? controlValueObject.toString() : NO_VALUE;
+                final String testValue = (testValueObject != null) ? testValueObject.toString() : NO_VALUE;
 
+                final Node controlNode = controlDetails.getTarget();
+                final Node testNode = testDetails.getTarget();
+
+                final Map<String, String> controlNodeAttributes = getNodeAttributesFromNode(controlNode);
+                final Map<String, String> testNodeAttributes = getNodeAttributesFromNode(testNode);
+//                attributeDifferences.add(new NonTextDifference(xpath, controlNodeAttributes, testNodeAttributes, "Atrybut zmieniony: " + controlValue + " → " + testValue));
+                attributeDifferences.add(new TextDifference(xpath, controlNodeAttributes, testNodeAttributes, controlValue, testValue));
             } else if (type == ComparisonType.CHILD_NODELIST_SEQUENCE) {
-                orderDifferences.add("XPath: " + xpath + "\n  - Kolejność węzłów różna");
+                final Node controlNode = controlDetails.getTarget();
+                final Node testNode = testDetails.getTarget();
+
+                final Map<String, String> controlNodeAttributes = getNodeAttributesFromNode(controlNode);
+                final Map<String, String> testNodeAttributes = getNodeAttributesFromNode(testNode);
+                orderDifferences.add(new NonTextDifference(xpath, controlNodeAttributes, testNodeAttributes, "Different order of nodes"));
             } else {
-                otherDifferences.add("XPath: " + xpath + "\n  - Rodzaj różnicy: " + type);
+                final Node controlNode = controlDetails.getTarget();
+                final Node testNode = testDetails.getTarget();
+
+                final Map<String, String> controlNodeAttributes = getNodeAttributesFromNode(controlNode);
+                final Map<String, String> testNodeAttributes = getNodeAttributesFromNode(testNode);
+
+                otherDifferences.add(new NonTextDifference(xpath, controlNodeAttributes, testNodeAttributes, "Difference type: " + type));
             }
         }
 
-        writer.println("\n==== PORÓWNANIE XML ====");
+        writer.println("\n============ XML COMPARISON ============");
 
         int oldXmlNodeCount = countNodes(oldXml);
         int correctNodeCount = oldXmlNodeCount - textDifferences.size();
         double similarityPercentage = ((double) (correctNodeCount) / oldXmlNodeCount) * 100;
-        writer.println("\nLiczba wezlow w old: " + oldXmlNodeCount);
-        writer.println("Liczba niepasujacych: " + textDifferences.size());
+        writer.println("Control nodes: " + oldXmlNodeCount);
+        writer.println("Mismatch nodes: " + textDifferences.size());
 
-        writer.printf("\nProcent zgodności: %.2f%%\n", similarityPercentage);
+        writer.printf("\nSimilarity: %.2f%%\n", similarityPercentage);
 
         if (!textDifferences.isEmpty()) {
-            writer.println("\n=== Zmiany tekstowe ===");
+            writer.println("\n=== Text differences ===");
             textDifferences.forEach(writer::println);
         }
 
         if (!attributeDifferences.isEmpty()) {
-            writer.println("\n=== Zmiany w atrybutach ===");
+            writer.println("\n=== Attribute differences ===");
             attributeDifferences.forEach(writer::println);
         }
 
         if (!orderDifferences.isEmpty()) {
-            writer.println("\n=== Zmiany w kolejności węzłów ===");
+            writer.println("\n=== Node order change ===");
             orderDifferences.forEach(writer::println);
         }
 
         if (!otherDifferences.isEmpty()) {
-            writer.println("\n=== Inne zmiany ===");
+            writer.println("\n=== Other ===");
             otherDifferences.forEach(writer::println);
         }
     }
 
-    private static String getAttributeName(String controlNodeXPath) {
-        return controlNodeXPath.contains("@") ? controlNodeXPath.substring(controlNodeXPath.indexOf('@') + 1) : "";
+    private static String chooseXPath(final Comparison comparison) {
+        if (comparison.getControlDetails().getXPath() != null) {
+            return comparison.getControlDetails().getXPath();
+        }
+
+        if (comparison.getTestDetails().getXPath() != null) {
+            return comparison.getTestDetails().getXPath();
+        }
+
+        return null;
     }
 
-    private static String getLastNodeFromParentXPath(String controlNodeParentXPath) {
-        final int lastSlashIndex = controlNodeParentXPath.lastIndexOf('/');
-        int firstBracketIndex = controlNodeParentXPath.indexOf('[', lastSlashIndex);
+    private static Map<String, String> getNodeAttributesFromNode(final Node node) {
+        if (node == null || !node.hasAttributes()) {
+            return null;
+        }
+
+        final NamedNodeMap attributes = node.getAttributes();
+        final Map<String, String> attributeMap = new HashMap<>();
+
+        for (int i = 0; i < attributes.getLength(); i++) {
+            final Node attribute = attributes.item(i);
+            attributeMap.put(attribute.getNodeName(), attribute.getNodeValue());
+        }
+
+        return attributeMap;
+    }
+
+    private static String getAttributeNameFromXPath(final String nodeXPath) {
+        return nodeXPath.contains("@") ? nodeXPath.substring(nodeXPath.indexOf('@') + 1) : "";
+    }
+
+    private static String getLastNodeFromXPath(final String nodeParentXPath) {
+        final int lastSlashIndex = nodeParentXPath.lastIndexOf('/');
+        final int firstBracketIndex = nodeParentXPath.indexOf('[', lastSlashIndex);
 
         return (firstBracketIndex != -1)
-                ? controlNodeParentXPath.substring(lastSlashIndex + 1, firstBracketIndex)
-                : controlNodeParentXPath.substring(lastSlashIndex + 1);
+                ? nodeParentXPath.substring(lastSlashIndex + 1, firstBracketIndex)
+                : nodeParentXPath.substring(lastSlashIndex + 1);
     }
 
-    private static boolean hasSkippingAttribute(Node node) {
+    private static boolean hasSkippingAttribute(final Node node) {
         if (node == null || !node.hasAttributes()) {
             return false;
         }
 
-        NamedNodeMap attributes = node.getAttributes();
+        final NamedNodeMap attributes = node.getAttributes();
         for (int i = 0; i < attributes.getLength(); i++) {
-            Node attribute = attributes.item(i);
-            String attributeName = attribute.getNodeName();
-            String attributeValue = attribute.getNodeValue();
+            final Node attribute = attributes.item(i);
+            final String attributeName = attribute.getNodeName();
+            final String attributeValue = attribute.getNodeValue();
 
             if (SKIP_FOR_ATTRIBUTE_MAP.containsKey(attributeName) &&
                     SKIP_FOR_ATTRIBUTE_MAP.get(attributeName).equals(attributeValue)) {
@@ -238,7 +281,6 @@ public class XmlComparator {
         }
         return false;
     }
-
 
     private static boolean filterNode(final Node node) {
         return !IGNORE_NODES.contains(node.getNodeName());
@@ -252,7 +294,7 @@ public class XmlComparator {
 
             if (attributes != null) {
                 for (int i = 0; i < attributes.getLength(); i++) {
-                    Node attribute = attributes.item(i);
+                    final Node attribute = attributes.item(i);
                     final String attributeString = attribute.toString();
                     if (TIME_WITH_DIFFERENT_ENDING.contains(attributeString)) {
                         return true;
@@ -263,20 +305,20 @@ public class XmlComparator {
         return false;
     }
 
-    private static int countNodes(String xml) throws ParserConfigurationException, IOException, SAXException {
+    private static int countNodes(final String xml) throws ParserConfigurationException, IOException, SAXException {
         final DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         final DocumentBuilder documentBuilder = factory.newDocumentBuilder();
-        Document document = documentBuilder.parse(new ByteArrayInputStream(xml.getBytes()));
+        final Document document = documentBuilder.parse(new ByteArrayInputStream(xml.getBytes()));
 
         return countElementsRecursively(document.getDocumentElement());
     }
 
-    private static int countElementsRecursively(Node node) {
+    private static int countElementsRecursively(final Node node) {
         int count = 1; // Liczymy bieżący węzeł (element)
 
-        NodeList children = node.getChildNodes();
+        final NodeList children = node.getChildNodes();
         for (int i = 0; i < children.getLength(); i++) {
-            Node child = children.item(i);
+            final Node child = children.item(i);
             if (child.getNodeType() == Node.ELEMENT_NODE) { // Liczymy tylko elementy
                 count += countElementsRecursively(child);
             }
