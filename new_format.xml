@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <order>
-    <customer atrybut1="atrybutText" atrybut2="atrybutText">
-        <email atrybut1="atrybutText">jan.kowalski@example.com</email>
-        <name atrybut1="atrybutText" atrybut2="atrybutDwa">Piotr Kowalski</name>
-        <test atrybut1 = "atrybutText">test</test>
+    <customer>
+        <email>jan.kowalski@example.com</email>
+        <name bikId="5332">Piotr Kowalski</name>
+        <test>test</test>
     </customer>
 </order>

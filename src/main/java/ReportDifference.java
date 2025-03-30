@@ -16,18 +16,11 @@ public abstract class ReportDifference {
 
     protected String printAttributes() {
         final Map<String, String> attributesToPrint = controlNodeAttributes != null ? controlNodeAttributes : testNodeAttributes;
-        return attributesToPrint.toString();
 
-//        if (attributesToPrint == null || attributesToPrint.isEmpty()) {
-//            return "[]";
-//        }
-//
-//        return attributesToPrint.entrySet()
-//                .stream()
-//                .map(entry -> entry.getKey() + "=" + entry.getValue())
-//                .reduce((a, b) -> a + ", " + b)
-//                .map(str -> "[" + str + "]")
-//                .orElse("[]");
+        if (attributesToPrint == null || attributesToPrint.isEmpty()) {
+            return "[]";
+        }
+        return attributesToPrint.toString();
     }
 
     public abstract String toString();
