@@ -1,3 +1,5 @@
+package comparator.diffrence;
+
 import java.util.Map;
 
 public abstract class ReportDifference {
