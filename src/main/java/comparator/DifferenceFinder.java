@@ -1,5 +1,6 @@
 package comparator;
 
+import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.xmlunit.builder.DiffBuilder;
@@ -29,7 +30,7 @@ public class DifferenceFinder {
 
     private static String pathToSkip = null;
 
-    public static List<Difference> findDifferences(final String controlXml, final String testXml) {
+    public static List<Difference> findDifferences(final Document controlXml, final Document testXml) {
         final Diff diff = DiffBuilder.compare(controlXml)
                 .withTest(testXml)
                 .ignoreWhitespace()
@@ -170,5 +171,9 @@ public class DifferenceFinder {
 
     private static boolean filterNode(final Node node) {
         return !IGNORE_NODES.contains(node.getNodeName());
+    }
+
+    private static boolean isNodeInControl(Node node, Document controlDoc) {
+        return controlDoc.getElementsByTagName(node.getNodeName()).getLength() > 0;
     }
 }
