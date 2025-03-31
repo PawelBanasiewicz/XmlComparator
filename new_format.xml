@@ -2,7 +2,6 @@
 <order>
     <customer>
         <email>jan.kowalski@example.com</email>
-        <name bikId="5332">Piotr Kowalski</name>
-        <test>test</test>
+        <name>Piotr Kowalski</name>
     </customer>
 </order>

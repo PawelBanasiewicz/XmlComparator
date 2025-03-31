@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <order>
     <customer>
-        <name bikId="5332">Jan Kowalski</name>
+        <name>Jan Kowalski</name>
         <email>jan.kowalski@example.com</email>
-        <test>test</test>
+    </customer>
+    <customer>
+        <email>jan.kowalski@example.com</email>
+        <name>Piotr Kowalski</name>
     </customer>
 </order>

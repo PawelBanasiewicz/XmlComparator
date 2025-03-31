@@ -37,7 +37,7 @@ public class DifferenceFinder {
                 .ignoreComments()
                 .checkForSimilar()
                 .withNodeMatcher(new DefaultNodeMatcher(ElementSelectors.byName))
-                .withNodeFilter(DifferenceFinder::filterNode)
+                .withNodeFilter(node -> XmlUtils.isNodeInControlDocument(node, controlXml))
                 .withDifferenceEvaluator(DifferenceFinder::customDifferenceEvaluator)
                 .build();
 
@@ -167,13 +167,5 @@ public class DifferenceFinder {
         return (firstBracketIndex != -1)
                 ? nodeParentXPath.substring(lastSlashIndex + 1, firstBracketIndex)
                 : nodeParentXPath.substring(lastSlashIndex + 1);
-    }
-
-    private static boolean filterNode(final Node node) {
-        return !IGNORE_NODES.contains(node.getNodeName());
-    }
-
-    private static boolean isNodeInControl(Node node, Document controlDoc) {
-        return controlDoc.getElementsByTagName(node.getNodeName()).getLength() > 0;
     }
 }
